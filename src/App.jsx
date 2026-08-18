@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import Select from 'react-select';
 import { 
@@ -10,26 +10,23 @@ import {
   Briefcase, 
   GraduationCap, 
   Search,
-  Loader2,
   HardHat,
   Monitor,
   Stethoscope,
   BookOpen,
   Leaf,
-  Cog
+  Cog,
+  Filter
 } from 'lucide-react';
 import AdBanner from './components/AdBanner';
 import './index.css';
 
-// Türkçe karaktere duyarlı küçük harfe çevirme yardımcısı
 const trToLower = (str) => String(str || '').toLocaleLowerCase('tr-TR');
 
-// Better Faculty/Program Icons based on name
 const getProgramIcon = (fakulteAdi, programAdi) => {
   const fName = String(fakulteAdi || '').toLocaleUpperCase('tr-TR');
   const pName = String(programAdi || '').toLocaleUpperCase('tr-TR');
   
-  // Specific program checks first
   if (pName.includes('İNŞAAT')) return <HardHat size={48} strokeWidth={1.5} color="var(--color-icon-insaat)" />;
   if (pName.includes('BİLGİSAYAR') || pName.includes('YAZILIM') || pName.includes('BİLİŞİM')) return <Monitor size={48} strokeWidth={1.5} color="var(--color-icon-bilgisayar)" />;
   if (pName.includes('TIP') || pName.includes('DİŞ') || pName.includes('HEMŞİRE') || pName.includes('SAĞLIK')) return <Stethoscope size={48} strokeWidth={1.5} color="var(--color-icon-saglik)" />;
@@ -39,7 +36,6 @@ const getProgramIcon = (fakulteAdi, programAdi) => {
   if (pName.includes('ZİRAAT') || pName.includes('ORMAN') || pName.includes('ÇEVRE')) return <Leaf size={48} strokeWidth={1.5} color="var(--color-icon-ziraat)" />;
   if (pName.includes('MAKİNE') || pName.includes('MEKATRONİK') || pName.includes('ENDÜSTRİ')) return <Cog size={48} strokeWidth={1.5} color="var(--color-icon-makine)" />;
   
-  // Fallback to faculty checks
   if (fName.includes('MÜHENDİSLİK')) return <Cog size={48} strokeWidth={1.5} color="var(--color-icon-muh)" />;
   if (fName.includes('İNSAN') || fName.includes('TOPLUM') || fName.includes('FEN-EDEBİYAT')) return <Users size={48} strokeWidth={1.5} color="var(--color-icon-insan)" />;
   if (fName.includes('İLETİŞİM')) return <MessageCircle size={48} strokeWidth={1.5} color="var(--color-icon-iletisim)" />;
@@ -48,7 +44,6 @@ const getProgramIcon = (fakulteAdi, programAdi) => {
   return <GraduationCap size={48} strokeWidth={1.5} color="var(--color-accent)" />;
 };
 
-// Custom styles for React-Select to match brutalist aesthetic
 const selectStyles = {
   control: (base, state) => ({
     ...base,
@@ -111,21 +106,21 @@ const selectStyles = {
 function App() {
   const [programsData, setProgramsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // Search/Filters state
+  // Pagination / Infinite Scroll
+  const [displayCount, setDisplayCount] = useState(40);
+  const observerTarget = useRef(null);
+
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // react-select states (arrays)
   const [selectedUnis, setSelectedUnis] = useState([]);
   const [selectedFaculties, setSelectedFaculties] = useState([]);
   const [selectedPrograms, setSelectedPrograms] = useState([]);
   const [selectedPuanTypes, setSelectedPuanTypes] = useState([]);
   const [selectedUniTypes, setSelectedUniTypes] = useState([]);
-  
   const [minPuan, setMinPuan] = useState('');
   const [maxPuan, setMaxPuan] = useState('');
 
-  // Fetch and parse the Excel file
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -167,7 +162,6 @@ function App() {
     loadData();
   }, []);
 
-  // Derive unique values for react-select options (Cascading Filters)
   const uniOptions = useMemo(() => {
     let data = programsData;
     if (selectedUniTypes.length > 0) {
@@ -208,15 +202,12 @@ function App() {
     { value: 'VAKIF', label: 'Vakıf' }
   ];
 
-  // Custom filter function for react-select to handle Turkish characters
   const trCustomFilter = (option, inputValue) => {
     return trToLower(option.label).includes(trToLower(inputValue));
   };
 
-  // Filter logic
   const filteredPrograms = useMemo(() => {
     return programsData.filter(prog => {
-      // Kelime aramasında Türkçe karakter uyumu
       const matchSearch = searchTerm === '' || 
                           trToLower(prog.universiteAdi).includes(trToLower(searchTerm)) || 
                           trToLower(prog.programAdi).includes(trToLower(searchTerm));
@@ -241,18 +232,42 @@ function App() {
     });
   }, [searchTerm, selectedUniTypes, selectedPuanTypes, selectedUnis, selectedFaculties, selectedPrograms, minPuan, maxPuan, programsData]);
 
+  // Reset display count when filters change
+  useEffect(() => {
+    setDisplayCount(40);
+  }, [filteredPrograms]);
+
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting) {
+          setDisplayCount(prev => prev + 40);
+        }
+      },
+      { threshold: 1.0 }
+    );
+    
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+    
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [observerTarget]);
+
   if (loading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', justifyContent: 'center', alignItems: 'center', backgroundColor: 'var(--color-bg-main)' }}>
-        <Loader2 className="spinner" size={64} color="var(--color-accent)" />
-        <h2 style={{ marginTop: '20px' }}>Veriler Yükleniyor...</h2>
-        <p style={{ color: 'var(--color-text-muted)' }}>Excel dosyası işleniyor, lütfen bekleyin.</p>
+      <div className="modern-loader-container">
+        <div className="brutalist-spinner"></div>
       </div>
     );
   }
 
-  const displayLimit = 150;
-  const displayedPrograms = filteredPrograms.slice(0, displayLimit);
+  const displayedPrograms = filteredPrograms.slice(0, displayCount);
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -267,8 +282,18 @@ function App() {
 
   return (
     <div className="container">
+      
+      {/* Mobile Toggle Button */}
+      <button 
+        className="mobile-filter-toggle"
+        onClick={() => setIsMobileFiltersOpen(!isMobileFiltersOpen)}
+      >
+        <Filter size={20} />
+        {isMobileFiltersOpen ? "Filtreleri Gizle" : "Filtreleri Göster"}
+      </button>
+
       {/* Sidebar Filters */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${isMobileFiltersOpen ? 'mobile-open' : ''}`}>
         <h2>
           <Search size={24} style={{ marginRight: '8px', verticalAlign: 'middle' }}/>
           Filtreler
@@ -286,7 +311,6 @@ function App() {
             filterOption={trCustomFilter}
           />
         </div>
-
 
         <div className="filter-group">
           <label htmlFor="search">Kelime ile Ara</label>
@@ -365,7 +389,6 @@ function App() {
           />
         </div>
         
-        
         <button className="reset-btn" style={{ width: '100%', marginTop: '10px' }} onClick={resetFilters}>
           Tüm Filtreleri Temizle
         </button>
@@ -383,66 +406,72 @@ function App() {
         <div className="results-header">
           <span>
             Toplam <strong>{filteredPrograms.length}</strong> program bulundu.
-            {filteredPrograms.length > displayLimit && ` (Performans için ilk ${displayLimit} sonuç gösteriliyor)`}
           </span>
         </div>
 
         <div className="results-grid">
           {displayedPrograms.length > 0 ? (
-            displayedPrograms.map((prog, index) => (
-              <div key={`${prog.programKodu}-${index}`}>
-                {/* Her 20 sonuçta bir yatay reklam göster (0. index hariç) */}
-                {index > 0 && index % 20 === 0 && (
-                  <AdBanner dataAdSlot="IN_FEED_SLOT_ID" dataAdFormat="fluid" />
-                )}
-                
-                <div className="program-card">
-                  <div className="card-photo">
-                    {getProgramIcon(prog.fakulteAdi, prog.programAdi)}
-                  </div>
-                  <div className="card-content">
-                    <div className="card-header">
-                      <div>
-                        <div className="uni-name">{prog.universiteAdi} - {prog.fakulteAdi}</div>
-                        <div className="prog-name">{prog.programAdi}</div>
-                      </div>
-                      <span className={`type-badge ${(prog.universiteTuru || '').toLocaleLowerCase('tr-TR')}`}>
-                        {prog.universiteTuru}
-                      </span>
+            <>
+              {displayedPrograms.map((prog, index) => (
+                <div key={`${prog.programKodu}-${index}`}>
+                  {/* Her 20 sonuçta bir yatay reklam göster (0. index hariç) */}
+                  {index > 0 && index % 20 === 0 && (
+                    <AdBanner dataAdSlot="IN_FEED_SLOT_ID" dataAdFormat="fluid" />
+                  )}
+                  
+                  <div className="program-card">
+                    <div className="card-photo">
+                      {getProgramIcon(prog.fakulteAdi, prog.programAdi)}
                     </div>
-                    
-                    <div className="card-details">
-                      <div className="detail-item">
-                        <span className="detail-label">Puan Türü</span>
-                        <span className={`detail-value score-badge ${(prog.puanTuru || '').toLocaleLowerCase('tr-TR')}`}>
-                          {prog.puanTuru}
+                    <div className="card-content">
+                      <div className="card-header">
+                        <div>
+                          <div className="uni-name">{prog.universiteAdi} - {prog.fakulteAdi}</div>
+                          <div className="prog-name">{prog.programAdi}</div>
+                        </div>
+                        <span className={`type-badge ${(prog.universiteTuru || '').toLocaleLowerCase('tr-TR')}`}>
+                          {prog.universiteTuru}
                         </span>
                       </div>
-                      <div className="detail-item">
-                        <span className="detail-label">Kontenjan</span>
-                        <span className="detail-value">{prog.genelKontenjan}</span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="detail-label">Taban Puan</span>
-                        <span className="detail-value highlight">
-                          {typeof prog.enKucukPuan === 'number' ? prog.enKucukPuan.toFixed(5) : prog.enKucukPuan}
-                        </span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="detail-label">Tavan Puan</span>
-                        <span className="detail-value">
-                          {typeof prog.enBuyukPuan === 'number' ? prog.enBuyukPuan.toFixed(5) : prog.enBuyukPuan}
-                        </span>
-                      </div>
-                      <div className="detail-item">
-                        <span className="detail-label">Program Kodu</span>
-                        <span className="detail-value monospace">{prog.programKodu}</span>
+                      
+                      <div className="card-details">
+                        <div className="detail-item">
+                          <span className="detail-label">Puan Türü</span>
+                          <span className={`detail-value score-badge ${(prog.puanTuru || '').toLocaleLowerCase('tr-TR')}`}>
+                            {prog.puanTuru}
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-label">Kontenjan</span>
+                          <span className="detail-value">{prog.genelKontenjan}</span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-label">Taban Puan</span>
+                          <span className="detail-value highlight">
+                            {typeof prog.enKucukPuan === 'number' ? prog.enKucukPuan.toFixed(5) : prog.enKucukPuan}
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-label">Tavan Puan</span>
+                          <span className="detail-value">
+                            {typeof prog.enBuyukPuan === 'number' ? prog.enBuyukPuan.toFixed(5) : prog.enBuyukPuan}
+                          </span>
+                        </div>
+                        <div className="detail-item">
+                          <span className="detail-label">Program Kodu</span>
+                          <span className="detail-value monospace">{prog.programKodu}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+              
+              {/* Infinite Scroll trigger element */}
+              {displayedPrograms.length < filteredPrograms.length && (
+                <div ref={observerTarget} style={{ height: '20px', width: '100%' }}></div>
+              )}
+            </>
           ) : (
             <div className="empty-state">
               <Search size={48} strokeWidth={1} />
