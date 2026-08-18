@@ -39,7 +39,7 @@ const AdBanner = ({
           minHeight: '100px',
           background: 'var(--color-border-light)' // Placeholder rengi
         }}
-        data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" // TODO: Kendi Publisher Kimliğinizi (ca-pub) girin
+        data-ad-client="ca-pub-9510430616547770"
         data-ad-slot={dataAdSlot}
         data-ad-format={dataAdFormat}
         data-full-width-responsive={fullWidthResponsive ? "true" : "false"}
