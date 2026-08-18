@@ -120,6 +120,7 @@ function App() {
   const [selectedUniTypes, setSelectedUniTypes] = useState([]);
   const [minPuan, setMinPuan] = useState('');
   const [maxPuan, setMaxPuan] = useState('');
+  const [sortBy, setSortBy] = useState('puan-desc');
 
   useEffect(() => {
     const loadData = async () => {
@@ -207,7 +208,7 @@ function App() {
   };
 
   const filteredPrograms = useMemo(() => {
-    return programsData.filter(prog => {
+    const result = programsData.filter(prog => {
       const matchSearch = searchTerm === '' || 
                           trToLower(prog.universiteAdi).includes(trToLower(searchTerm)) || 
                           trToLower(prog.programAdi).includes(trToLower(searchTerm));
@@ -230,7 +231,47 @@ function App() {
       
       return matchSearch && matchUniType && matchPuanType && matchUni && matchFaculty && matchProgram && minFilter && maxFilter;
     });
-  }, [searchTerm, selectedUniTypes, selectedPuanTypes, selectedUnis, selectedFaculties, selectedPrograms, minPuan, maxPuan, programsData]);
+
+    const parseScoreForSort = (val) => {
+      if (!val || val === '--') return NaN;
+      if (typeof val === 'number') return val;
+      return parseFloat(String(val).replace(',', '.'));
+    };
+
+    result.sort((a, b) => {
+      if (sortBy === 'puan-desc') {
+        const scoreA = isNaN(parseScoreForSort(a.enKucukPuan)) ? -1 : parseScoreForSort(a.enKucukPuan);
+        const scoreB = isNaN(parseScoreForSort(b.enKucukPuan)) ? -1 : parseScoreForSort(b.enKucukPuan);
+        return scoreB - scoreA;
+      }
+      if (sortBy === 'puan-asc') {
+        const scoreA = isNaN(parseScoreForSort(a.enKucukPuan)) ? Infinity : parseScoreForSort(a.enKucukPuan);
+        const scoreB = isNaN(parseScoreForSort(b.enKucukPuan)) ? Infinity : parseScoreForSort(b.enKucukPuan);
+        return scoreA - scoreB;
+      }
+      if (sortBy === 'uni-asc') {
+        return trToLower(a.universiteAdi).localeCompare(trToLower(b.universiteAdi), 'tr');
+      }
+      if (sortBy === 'uni-desc') {
+        return trToLower(b.universiteAdi).localeCompare(trToLower(a.universiteAdi), 'tr');
+      }
+      if (sortBy === 'fakulte-asc') {
+        return trToLower(a.fakulteAdi).localeCompare(trToLower(b.fakulteAdi), 'tr');
+      }
+      if (sortBy === 'fakulte-desc') {
+        return trToLower(b.fakulteAdi).localeCompare(trToLower(a.fakulteAdi), 'tr');
+      }
+      if (sortBy === 'bolum-asc') {
+        return trToLower(a.programAdi).localeCompare(trToLower(b.programAdi), 'tr');
+      }
+      if (sortBy === 'bolum-desc') {
+        return trToLower(b.programAdi).localeCompare(trToLower(a.programAdi), 'tr');
+      }
+      return 0;
+    });
+
+    return result;
+  }, [searchTerm, selectedUniTypes, selectedPuanTypes, selectedUnis, selectedFaculties, selectedPrograms, minPuan, maxPuan, programsData, sortBy]);
 
   // Reset display count when filters change
   useEffect(() => {
@@ -403,10 +444,36 @@ function App() {
       <main className="main-content">
         <h1>2026 Lisans Programları</h1>
         
-        <div className="results-header">
+        <div className="results-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <span>
             Toplam <strong>{filteredPrograms.length}</strong> program bulundu.
           </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-muted)' }}>Sırala:</label>
+            <select 
+              value={sortBy} 
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{
+                padding: '6px 12px',
+                border: '2px solid var(--color-border)',
+                background: 'var(--color-bg-main)',
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 600,
+                cursor: 'pointer',
+                borderRadius: 0,
+                outline: 'none'
+              }}
+            >
+              <option value="puan-desc">Puan (Azalan)</option>
+              <option value="puan-asc">Puan (Artan)</option>
+              <option value="uni-asc">Üniversite (A-Z)</option>
+              <option value="uni-desc">Üniversite (Z-A)</option>
+              <option value="fakulte-asc">Fakülte (A-Z)</option>
+              <option value="fakulte-desc">Fakülte (Z-A)</option>
+              <option value="bolum-asc">Bölüm (A-Z)</option>
+              <option value="bolum-desc">Bölüm (Z-A)</option>
+            </select>
+          </div>
         </div>
 
         <div className="results-grid">
